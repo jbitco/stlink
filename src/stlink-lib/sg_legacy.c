@@ -28,10 +28,10 @@
  * SB Device Class Definition for Mass Storage Devices:
  * www.usb.org/developers/devclass_docs/usbmassbulk_10.pdf
  *
- * dt		- Data Transfer (IN/OUT)
- * CBW      - Command Block Wrapper
- * CSW		- Command Status Wrapper
- * RFU		- Reserved for Future Use
+ * dt         - Data Transfer (IN/OUT)
+ * CBW        - Command Block Wrapper
+ * CSW        - Command Status Wrapper
+ * RFU        - Reserved for Future Use
  *
  * Originally, this driver used scsi pass through commands, which required the
  * usb-storage module to be loaded, providing the /dev/sgX links.  The USB mass
@@ -77,7 +77,7 @@
  */
 
 /*
- * File: sg.c
+ * File: sg_legacy.c
  *
  *
  */
@@ -91,12 +91,14 @@
 #include <assert.h>
 // #include <sys/types.h> // TODO: Check use
 
-#include "sg.h"
+#include <stlink.h>
+#include <stlink_backend.h>
+#include <stlink_cmd.h>
+#include <stm32_register.h>
 
-#include "commands.h"
+#include "sg_legacy.h"
 #include "logging.h"
 #include "read_write.h"
-#include "register.h"
 #include "usb.h"
 // #include <stlink.h>    // TODO: Check use
 
@@ -104,7 +106,7 @@
 #define STLINK_FALSE 0x81
 
 static void clear_cdb(struct stlink_libsg *sl) {
-    for (uint32_t i = 0; i < sizeof(sl->cdb_cmd_blk); i++) { sl->cdb_cmd_blk[i] = 0; }
+    for(uint32_t i = 0; i < sizeof(sl->cdb_cmd_blk); i++) { sl->cdb_cmd_blk[i] = 0; }
 
     // set default
     sl->cdb_cmd_blk[0] = STLINK_DEBUG_COMMAND;
@@ -116,7 +118,7 @@ static void clear_cdb(struct stlink_libsg *sl) {
  * @param sl
  */
 void _stlink_sg_close(stlink_t *sl) {
-    if (sl) {
+    if(sl) {
         struct stlink_libsg *slsg = sl->backend_data;
         libusb_close(slsg->usb_handle);
         libusb_exit(slsg->libusb_ctx);
@@ -135,17 +137,17 @@ static int32_t get_usb_mass_storage_status(libusb_device_handle *handle, uint8_t
         ret = libusb_bulk_transfer(handle, endpoint, (unsigned char *)&csw, sizeof(csw),
                                    &transferred, SG_TIMEOUT_MSEC);
 
-        if (ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint); }
+        if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint); }
 
         try++;
     } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
 
-    if (ret != LIBUSB_SUCCESS) {
+    if(ret != LIBUSB_SUCCESS) {
         WLOG("%s: receiving failed: %d\n", __func__, ret);
         return (-1);
     }
 
-    if (transferred != sizeof(csw)) {
+    if(transferred != sizeof(csw)) {
         WLOG("%s: received unexpected amount: %d\n", __func__, transferred);
         return (-1);
     }
@@ -156,7 +158,7 @@ static int32_t get_usb_mass_storage_status(libusb_device_handle *handle, uint8_t
 
 #define USB_CSW_SIGNATURE 0x53425355  // 'U' 'S' 'B' 'S' (reversed)
 
-    if (rsig != USB_CSW_SIGNATURE) {
+    if(rsig != USB_CSW_SIGNATURE) {
         WLOG("status signature was invalid: %#x\n", rsig);
         return (-1);
     }
@@ -171,8 +173,8 @@ static int32_t dump_CDB_command(uint8_t *cdb, uint8_t cdb_len) {
     char *dbugp = dbugblah;
     dbugp += sprintf(dbugp, "Sending CDB [");
 
-    for (uint8_t i = 0; i < cdb_len; i++) {
-        dbugp += sprintf(dbugp, " 0x%02x", (uint32_t)cdb[i]);
+    for(uint8_t i = 0; i < cdb_len; i++) {
+        dbugp += sprintf(dbugp, " 0x%02x", (uint32_t) cdb[i]);
     }
 
     sprintf(dbugp, "]\n");
@@ -198,7 +200,7 @@ int32_t send_usb_mass_storage_command(libusb_device_handle *handle, uint8_t endp
 
     static uint32_t tag;
 
-    if (tag == 0) { tag = 1; }
+    if(tag == 0) { tag = 1; }
 
     int32_t try = 0;
     int32_t ret = 0;
@@ -231,14 +233,14 @@ int32_t send_usb_mass_storage_command(libusb_device_handle *handle, uint8_t endp
         ret = libusb_bulk_transfer(handle, endpoint_out, c_buf, sending_length,
                                    &real_transferred, SG_TIMEOUT_MSEC);
 
-        if (ret == LIBUSB_ERROR_PIPE) {
+        if(ret == LIBUSB_ERROR_PIPE) {
             libusb_clear_halt(handle, endpoint_out);
         }
 
         try++;
     } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
 
-    if (ret != LIBUSB_SUCCESS) {
+    if(ret != LIBUSB_SUCCESS) {
         WLOG("sending failed: %d\n", ret);
         return (-1);
     }
@@ -263,7 +265,7 @@ static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t
     uint32_t tag = send_usb_mass_storage_command(handle, endpoint_out, cdb, sizeof(cdb), 0,
                                                  LIBUSB_ENDPOINT_IN, REQUEST_SENSE_LENGTH);
 
-    if (tag == 0) {
+    if(tag == 0) {
         WLOG("refusing to send request sense with tag 0\n");
         return;
     }
@@ -277,29 +279,29 @@ static void get_sense(libusb_device_handle *handle, uint8_t endpoint_in, uint8_t
         ret = libusb_bulk_transfer(handle, endpoint_in, sense, sizeof(sense),
                                    &transferred, SG_TIMEOUT_MSEC);
 
-        if (ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint_in); }
+        if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint_in); }
 
         try++;
     } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
 
-    if (ret != LIBUSB_SUCCESS) {
+    if(ret != LIBUSB_SUCCESS) {
         WLOG("receiving sense failed: %d\n", ret);
         return;
     }
 
-    if (transferred != sizeof(sense)) {
-        WLOG("received unexpected amount of sense: %d != %u\n", transferred, (uint32_t)sizeof(sense));
+    if(transferred != sizeof(sense)) {
+        WLOG("received unexpected amount of sense: %d != %u\n", transferred, (uint32_t) sizeof(sense));
     }
 
     uint32_t received_tag;
     int32_t status = get_usb_mass_storage_status(handle, endpoint_in, &received_tag);
 
-    if (status != 0) {
+    if(status != 0) {
         WLOG("receiving sense failed with status: %02x\n", status);
         return;
     }
 
-    if (sense[0] != 0x70 && sense[0] != 0x71) {
+    if(sense[0] != 0x70 && sense[0] != 0x71) {
         WLOG("No sense data\n");
     } else {
         WLOG("Sense KCQ: %02X %02X %02X\n", sense[2] & 0x0f, sense[12], sense[13]);
@@ -326,12 +328,12 @@ int32_t send_usb_data_only(libusb_device_handle *handle, unsigned char endpoint_
         ret = libusb_bulk_transfer(handle, endpoint_out, cbuf, length,
                                    &real_transferred, SG_TIMEOUT_MSEC);
 
-        if (ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint_out); }
+        if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(handle, endpoint_out); }
 
         try++;
     } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
 
-    if (ret != LIBUSB_SUCCESS) {
+    if(ret != LIBUSB_SUCCESS) {
         WLOG("sending failed: %d\n", ret);
         return (-1);
     }
@@ -341,16 +343,16 @@ int32_t send_usb_data_only(libusb_device_handle *handle, unsigned char endpoint_
     // -ve is for my errors, 0 is good, +ve is libusb sense status bytes
     int32_t status = get_usb_mass_storage_status(handle, endpoint_in, &received_tag);
 
-    if (status < 0) {
+    if(status < 0) {
         WLOG("receiving status failed: %d\n", status);
         return (-1);
     }
 
-    if (status != 0) {
+    if(status != 0) {
         WLOG("receiving status not passed :(: %02x\n", status);
     }
 
-    if (status == 1) {
+    if(status == 1) {
         get_sense(handle, endpoint_in, endpoint_out);
         return (-1);
     }
@@ -375,22 +377,22 @@ int32_t stlink_q(stlink_t *sl) {
     int32_t real_transferred;
     int32_t ret;
 
-    if (rx_length > 0) {
+    if(rx_length > 0) {
         do {
             ret = libusb_bulk_transfer(sg->usb_handle, sg->ep_rep, sl->q_buf, rx_length,
                                        &real_transferred, SG_TIMEOUT_MSEC);
 
-            if (ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(sg->usb_handle, sg->ep_req); }
+            if(ret == LIBUSB_ERROR_PIPE) { libusb_clear_halt(sg->usb_handle, sg->ep_req); }
 
             try++;
         } while ((ret == LIBUSB_ERROR_PIPE) && (try < 3));
 
-        if (ret != LIBUSB_SUCCESS) {
+        if(ret != LIBUSB_SUCCESS) {
             WLOG("Receiving failed: %d\n", ret);
             return (-1);
         }
 
-        if (real_transferred != rx_length) {
+        if(real_transferred != rx_length) {
             WLOG("received unexpected amount: %d != %d\n", real_transferred, rx_length);
         }
     }
@@ -399,26 +401,26 @@ int32_t stlink_q(stlink_t *sl) {
     // -ve is for my errors, 0 is good, +ve is libusb sense status bytes
     int32_t status = get_usb_mass_storage_status(sg->usb_handle, sg->ep_rep, &received_tag);
 
-    if (status < 0) {
+    if(status < 0) {
         WLOG("receiving status failed: %d\n", status);
         return (-1);
     }
 
-    if (status != 0) {
+    if(status != 0) {
         WLOG("receiving status not passed :(: %02x\n", status);
     }
 
-    if (status == 1) {
+    if(status == 1) {
         get_sense(sg->usb_handle, sg->ep_rep, sg->ep_req);
         return (-1);
     }
 
-    if (received_tag != tag) {
+    if(received_tag != tag) {
         WLOG("received tag %d but expected %d\n", received_tag, tag);
         // return -1;
     }
 
-    if (rx_length > 0 && real_transferred != rx_length) {
+    if(rx_length > 0 && real_transferred != rx_length) {
         return (-1);
     }
 
@@ -427,7 +429,7 @@ int32_t stlink_q(stlink_t *sl) {
 
 // TODO: thinking, cleanup
 void stlink_stat(stlink_t *stl, char *txt) {
-    if (stl->q_len <= 0) { return; }
+    if(stl->q_len <= 0) { return; }
 
     stlink_print_data(stl);
 
@@ -462,7 +464,7 @@ int32_t _stlink_sg_current_mode(stlink_t *stl) {
     stl->q_len = 2;
     sl->q_addr = 0;
 
-    if (stlink_q(stl)) { return (-1); }
+    if(stlink_q(stl)) { return (-1); }
 
     return (stl->q_buf[0]);
 }
@@ -553,7 +555,7 @@ int32_t _stlink_sg_core_id(stlink_t *sl) {
     sg->q_addr = 0;
     ret = stlink_q(sl);
 
-    if (ret) { return (ret); }
+    if(ret) { return (ret); }
 
     sl->core_id = read_uint32(sl->q_buf, 0);
     return (0);
@@ -567,12 +569,12 @@ int32_t _stlink_sg_reset(stlink_t *sl) {
     sl->q_len = 2;
     sg->q_addr = 0;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     // Reset through AIRCR so NRST does not need to be connected
-    if (stlink_write_debug32(sl, STLINK_REG_AIRCR,
-                             STLINK_REG_AIRCR_VECTKEY | \
-                             STLINK_REG_AIRCR_SYSRESETREQ)) {
+    if(stlink_write_debug32(sl, STM32_REG_AIRCR,
+                             STM32_REG_AIRCR_VECTKEY | \
+                             STM32_REG_AIRCR_SYSRESETREQ)) {
         return (-1);
     }
 
@@ -589,7 +591,7 @@ int32_t _stlink_sg_jtag_reset(stlink_t *sl, int32_t value) {
     sl->q_len = 3;
     sg->q_addr = 2;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     stlink_stat(sl, "core reset");
 
@@ -614,7 +616,7 @@ int32_t _stlink_sg_force_debug(stlink_t *sl) {
     sl->q_len = 2;
     sg->q_addr = 0;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     stlink_stat(sl, "force debug");
     return (0);
@@ -629,7 +631,7 @@ int32_t _stlink_sg_read_all_regs(stlink_t *sl, struct stlink_reg *regp) {
     sl->q_len = 84;
     sg->q_addr = 0;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     stlink_print_data(sl);
 
@@ -637,10 +639,10 @@ int32_t _stlink_sg_read_all_regs(stlink_t *sl, struct stlink_reg *regp) {
 
     // 0-3 | 4-7 | ... | 60-63 | 64-67 | 68-71   | 72-75      | 76-79 | 80-83
     // r0  | r1  | ... | r15   | xpsr  | main_sp | process_sp | rw    | rw2
-    for (int32_t i = 0; i < 16; i++) {
+    for(int32_t i = 0; i < 16; i++) {
         regp->r[i] = read_uint32(sl->q_buf, 4 * i);
 
-        if (sl->verbose > 1) { DLOG("r%2d = 0x%08x\n", i, regp->r[i]); }
+        if(sl->verbose > 1) { DLOG("r%2d = 0x%08x\n", i, regp->r[i]); }
     }
 
     regp->xpsr = read_uint32(sl->q_buf, 64);
@@ -649,7 +651,7 @@ int32_t _stlink_sg_read_all_regs(stlink_t *sl, struct stlink_reg *regp) {
     regp->rw = read_uint32(sl->q_buf, 76);
     regp->rw2 = read_uint32(sl->q_buf, 80);
 
-    if (sl->verbose < 2) { return (0); }
+    if(sl->verbose < 2) { return (0); }
 
     DLOG("xpsr       = 0x%08x\n", regp->xpsr);
     DLOG("main_sp    = 0x%08x\n", regp->main_sp);
@@ -672,7 +674,7 @@ int32_t _stlink_sg_read_reg(stlink_t *sl, int32_t r_idx, struct stlink_reg *regp
     sl->q_len = 4;
     sg->q_addr = 0;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     //  0  |  1  | ... |  15   |  16   |   17    |   18       |  19   |  20
     // 0-3 | 4-7 | ... | 60-63 | 64-67 | 68-71   | 72-75      | 76-79 | 80-83
@@ -720,7 +722,7 @@ int32_t _stlink_sg_write_reg(stlink_t *sl, uint32_t reg, int32_t idx) {
     sl->q_len = 2;
     sg->q_addr = 0;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     stlink_stat(sl, "write reg");
     return (0);
@@ -753,7 +755,7 @@ int32_t _stlink_sg_run(stlink_t *sl, enum run_type type) {
     sl->q_len = 2;
     sg->q_addr = 0;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     stlink_stat(sl, "run core");
 
@@ -768,7 +770,7 @@ int32_t _stlink_sg_step(stlink_t *sl) {
     sl->q_len = 2;
     sg->q_addr = 0;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     stlink_stat(sl, "step core");
     return (0);
@@ -824,7 +826,7 @@ int32_t _stlink_sg_read_mem32(stlink_t *sl, uint32_t addr, uint16_t len) {
     sl->q_len = len;
     sg->q_addr = addr;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     stlink_print_data(sl);
     return (0);
@@ -846,13 +848,13 @@ int32_t _stlink_sg_write_mem8(stlink_t *sl, uint32_t addr, uint16_t len) {
     ret = send_usb_mass_storage_command(sg->usb_handle,
                                         sg->ep_req, sg->cdb_cmd_blk, CDB_SL, 0, 0, 0);
 
-    if (ret == -1) { return (ret); }
+    if(ret == -1) { return (ret); }
 
     // This sends the data...
     ret = send_usb_data_only(sg->usb_handle,
                              sg->ep_req, sg->ep_rep, sl->q_buf, len);
 
-    if (ret == -1) { return (ret); }
+    if(ret == -1) { return (ret); }
 
     stlink_print_data(sl);
     return (0);
@@ -874,13 +876,13 @@ int32_t _stlink_sg_write_mem32(stlink_t *sl, uint32_t addr, uint16_t len) {
     ret = send_usb_mass_storage_command(sg->usb_handle,
                                         sg->ep_req, sg->cdb_cmd_blk, CDB_SL, 0, 0, 0);
 
-    if (ret == -1) { return (ret); }
+    if(ret == -1) { return (ret); }
 
     // This sends the data...
     ret = send_usb_data_only(sg->usb_handle,
                              sg->ep_req, sg->ep_rep, sl->q_buf, len);
 
-    if (ret == -1) { return (ret); }
+    if(ret == -1) { return (ret); }
 
     stlink_print_data(sl);
     return (0);
@@ -907,7 +909,7 @@ int32_t _stlink_sg_read_debug32(stlink_t *sl, uint32_t addr, uint32_t *data) {
     write_uint32(sg->cdb_cmd_blk + 2, addr);
     sl->q_len = 8;
 
-    if (stlink_q(sl)) { return (-1); }
+    if(stlink_q(sl)) { return (-1); }
 
     *data = read_uint32(sl->q_buf, 4);
     return (0);
@@ -915,7 +917,7 @@ int32_t _stlink_sg_read_debug32(stlink_t *sl, uint32_t addr, uint32_t *data) {
 
 // exit the jtag or swd mode and enter the mass mode.
 int32_t _stlink_sg_exit_debug_mode(stlink_t *stl) {
-    if (stl) {
+    if(stl) {
         struct stlink_libsg* sl = stl->backend_data;
         clear_cdb(sl);
         sl->cdb_cmd_blk[1] = STLINK_DEBUG_EXIT;
@@ -969,19 +971,19 @@ static stlink_t* stlink_open(const int32_t verbose) {
     stlink_t *sl = malloc(sizeof(stlink_t));
     struct stlink_libsg *slsg = malloc(sizeof(struct stlink_libsg));
 
-    if (sl == NULL || slsg == NULL) {
+    if(sl == NULL || slsg == NULL) {
         WLOG("Couldn't malloc stlink and stlink_sg structures out of memory!\n");
 
-        if (sl != NULL) { free(sl); }
+        if(sl != NULL) { free(sl); }
 
-        if (slsg != NULL) { free(slsg); }
+        if(slsg != NULL) { free(slsg); }
 
         return (NULL);
     }
 
     memset(sl, 0, sizeof(stlink_t));
 
-    if (libusb_init(&(slsg->libusb_ctx))) {
+    if(libusb_init(&(slsg->libusb_ctx))) {
         WLOG("failed to init libusb context, wrong version of libraries?\n");
         free(sl);
         free(slsg);
@@ -996,7 +998,7 @@ static stlink_t* stlink_open(const int32_t verbose) {
 
     slsg->usb_handle = libusb_open_device_with_vid_pid(slsg->libusb_ctx, STLINK_USB_VID_ST, STLINK_USB_PID_STLINK);
 
-    if (slsg->usb_handle == NULL) {
+    if(slsg->usb_handle == NULL) {
         WLOG("Failed to find an stlink v1 by VID:PID\n");
         libusb_close(slsg->usb_handle);
         libusb_exit(slsg->libusb_ctx);
@@ -1007,10 +1009,10 @@ static stlink_t* stlink_open(const int32_t verbose) {
 
     // TODO: Could read the interface config descriptor, and assert lots of the assumptions
     // assumption: numInterfaces is always 1...
-    if (libusb_kernel_driver_active(slsg->usb_handle, 0) == 1) {
+    if(libusb_kernel_driver_active(slsg->usb_handle, 0) == 1) {
         int32_t r = libusb_detach_kernel_driver(slsg->usb_handle, 0);
 
-        if (r < 0) {
+        if(r < 0) {
             WLOG("libusb_detach_kernel_driver(() error %s\n", strerror(-r));
             libusb_close(slsg->usb_handle);
             libusb_exit(slsg->libusb_ctx);
@@ -1024,7 +1026,7 @@ static stlink_t* stlink_open(const int32_t verbose) {
 
     int32_t config;
 
-    if (libusb_get_configuration(slsg->usb_handle, &config)) {
+    if(libusb_get_configuration(slsg->usb_handle, &config)) {
         /* this may fail for a previous configured device */
         WLOG("libusb_get_configuration()\n");
         libusb_close(slsg->usb_handle);
@@ -1036,11 +1038,11 @@ static stlink_t* stlink_open(const int32_t verbose) {
     }
 
     // assumption: bConfigurationValue is always 1
-    if (config != 1) {
+    if(config != 1) {
         WLOG("Your stlink got into a real weird configuration, trying to fix it!\n");
         DLOG("setting new configuration (%d -> 1)\n", config);
 
-        if (libusb_set_configuration(slsg->usb_handle, 1)) {
+        if(libusb_set_configuration(slsg->usb_handle, 1)) {
             /* this may fail for a previous configured device */
             WLOG("libusb_set_configuration() failed\n");
             libusb_close(slsg->usb_handle);
@@ -1051,7 +1053,7 @@ static stlink_t* stlink_open(const int32_t verbose) {
         }
     }
 
-    if (libusb_claim_interface(slsg->usb_handle, 0)) {
+    if(libusb_claim_interface(slsg->usb_handle, 0)) {
         WLOG("libusb_claim_interface() failed\n");
         libusb_close(slsg->usb_handle);
         libusb_exit(slsg->libusb_ctx);
@@ -1081,14 +1083,14 @@ stlink_t* stlink_v1_open_inner(const int32_t verbose) {
     ugly_init(verbose);
     stlink_t *sl = stlink_open(verbose);
 
-    if (sl == NULL) {
+    if(sl == NULL) {
         ELOG("Could not open stlink device\n");
         return (NULL);
     }
 
     stlink_version(sl);
 
-    if ((sl->version.st_vid != STLINK_USB_VID_ST) || (sl->version.stlink_pid != STLINK_USB_PID_STLINK)) {
+    if((sl->version.st_vid != STLINK_USB_VID_ST) || (sl->version.stlink_pid != STLINK_USB_PID_STLINK)) {
         ELOG("WTF? successfully opened, but unable to read version details. BROKEN!\n");
         return (NULL);
     }
@@ -1112,7 +1114,7 @@ stlink_t* stlink_v1_open_inner(const int32_t verbose) {
     // re-query device info (and retest)
     stlink_version(sl);
 
-    if ((sl->version.st_vid != STLINK_USB_VID_ST) || (sl->version.stlink_pid != STLINK_USB_PID_STLINK)) {
+    if((sl->version.st_vid != STLINK_USB_VID_ST) || (sl->version.stlink_pid != STLINK_USB_PID_STLINK)) {
         ELOG("WTF? successfully opened, but unable to read version details. BROKEN!\n");
         return (NULL);
     }
@@ -1123,13 +1125,13 @@ stlink_t* stlink_v1_open_inner(const int32_t verbose) {
 stlink_t* stlink_v1_open(const int32_t verbose, int32_t reset) {
     stlink_t *sl = stlink_v1_open_inner(verbose);
 
-    if (sl == NULL) { return (NULL); }
+    if(sl == NULL) { return (NULL); }
 
     // by now, it _must_ be fully open and in a useful mode....
     stlink_enter_swd_mode(sl);
 
     // now we are ready to read the parameters
-    if (reset) { stlink_reset(sl, RESET_AUTO); }
+    if(reset) { stlink_reset(sl, RESET_AUTO); }
 
     stlink_load_device_params(sl);
     ILOG("Successfully opened a stlink v1 debugger\n");

@@ -9,7 +9,7 @@
 
 #include <logging.h>
 #include <read_write.h>
-#include <sg.h>
+#include <sg_legacy.h>
 
 #if defined(_MSC_VER)
 #define __attribute__(x)
@@ -45,7 +45,7 @@ int32_t main(void) { // main() ripped out of old stlink-hw.c
 
     stlink_t *sl = stlink_v1_open(99, 1);
 
-    if (sl == NULL) return (0);
+    if(sl == NULL) return (0);
 
     // we are in mass mode, go to swd
     stlink_enter_swd_mode(sl);
@@ -88,7 +88,7 @@ int32_t main(void) { // main() ripped out of old stlink-hw.c
 
     memset(sl->q_buf, 0, sizeof(sl->q_buf));
 
-    for (int32_t i = 0; i < 100; i++) {
+    for(int32_t i = 0; i < 100; i++) {
         write_uint32(sl->q_buf, LED_BLUE | LED_GREEN);
         stlink_write_mem32(sl, GPIOC_ODR, 4);
         // stlink_read_mem32(sl, 0x4001100c, 4);

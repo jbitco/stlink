@@ -28,15 +28,15 @@ int32_t win32_poll(struct pollfd *fds, uint32_t nfds, int32_t timo) {
     FD_ZERO(&ofds);
     FD_ZERO(&efds);
 
-    for (i = 0, op = ip = 0; i < nfds; ++i) {
+    for(i = 0, op = ip = 0; i < nfds; ++i) {
         fds[i].revents = 0;
 
-        if (fds[i].events & (POLLIN | POLLPRI)) {
+        if(fds[i].events & (POLLIN | POLLPRI)) {
             ip = &ifds;
             FD_SET(fds[i].fd, ip);
         }
 
-        if (fds[i].events & POLLOUT) {
+        if(fds[i].events & POLLOUT) {
             op = &ofds;
             FD_SET(fds[i].fd, op);
         }
@@ -49,7 +49,7 @@ int32_t win32_poll(struct pollfd *fds, uint32_t nfds, int32_t timo) {
 #endif
 
     /* Set up the timeval structure for the timeout parameter */
-    if (timo < 0) {
+    if(timo < 0) {
         toptr = 0;
     } else {
         toptr = &timeout;
@@ -68,21 +68,21 @@ int32_t win32_poll(struct pollfd *fds, uint32_t nfds, int32_t timo) {
     printf("Exiting select rc=%d\n", rc);
 #endif
 
-    if (rc <= 0) { return (rc); }
+    if(rc <= 0) { return (rc); }
 
-    if (rc > 0) {
-        for ( i = 0; i < nfds; ++i) {
+    if(rc > 0) {
+        for( i = 0; i < nfds; ++i) {
             SOCKET fd = fds[i].fd;
 
-            if (fds[i].events & (POLLIN | POLLPRI) && FD_ISSET(fd, &ifds)) {
+            if(fds[i].events & (POLLIN | POLLPRI) && FD_ISSET(fd, &ifds)) {
                 fds[i].revents |= POLLIN;
             }
 
-            if (fds[i].events & POLLOUT && FD_ISSET(fd, &ofds)) {
+            if(fds[i].events & POLLOUT && FD_ISSET(fd, &ofds)) {
                 fds[i].revents |= POLLOUT;
             }
 
-            if (FD_ISSET(fd, &efds)) {
+            if(FD_ISSET(fd, &efds)) {
                 // Some error was detected ... should be some way to know
                 fds[i].revents |= POLLHUP;
             }
@@ -133,7 +133,7 @@ static void set_socket_errno(int32_t winsock_err) {
 SOCKET win32_socket(int32_t domain, int32_t type, int32_t protocol) {
     SOCKET fd = socket(domain, type, protocol);
 
-    if (fd == INVALID_SOCKET) { set_socket_errno(WSAGetLastError()); }
+    if(fd == INVALID_SOCKET) { set_socket_errno(WSAGetLastError()); }
 
     return (fd);
 }
@@ -147,7 +147,7 @@ int32_t win32_connect(SOCKET fd, struct sockaddr *addr, socklen_t addr_len) {
     int32_t rc = connect(fd, addr, addr_len);
     assert(rc == 0 || rc == SOCKET_ERROR);
 
-    if (rc == SOCKET_ERROR) { set_connect_errno(WSAGetLastError()); }
+    if(rc == SOCKET_ERROR) { set_connect_errno(WSAGetLastError()); }
 
     return (rc);
 }
@@ -159,7 +159,7 @@ int32_t win32_connect(SOCKET fd, struct sockaddr *addr, socklen_t addr_len) {
 SOCKET win32_accept(SOCKET fd, struct sockaddr *addr, socklen_t *addr_len) {
     SOCKET newfd = accept(fd, addr, addr_len);
 
-    if (newfd == INVALID_SOCKET) {
+    if(newfd == INVALID_SOCKET) {
         set_socket_errno(WSAGetLastError());
         newfd = (SOCKET)-1;
     }
@@ -175,7 +175,7 @@ int32_t win32_shutdown(SOCKET fd, int32_t mode) {
     int32_t rc = shutdown(fd, mode);
     assert(rc == 0 || rc == SOCKET_ERROR);
 
-    if (rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
+    if(rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
 
     return (rc);
 }
@@ -183,7 +183,7 @@ int32_t win32_shutdown(SOCKET fd, int32_t mode) {
 int32_t win32_close_socket(SOCKET fd) {
     int32_t rc = closesocket(fd);
 
-    if (rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
+    if(rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
 
     return (rc);
 }
@@ -191,7 +191,7 @@ int32_t win32_close_socket(SOCKET fd) {
 ssize_t win32_write_socket(SOCKET fd, void *buf, int32_t n) {
     int32_t rc = send(fd, buf, n, 0);
 
-    if (rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
+    if(rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
 
     return (rc);
 }
@@ -199,7 +199,7 @@ ssize_t win32_write_socket(SOCKET fd, void *buf, int32_t n) {
 ssize_t win32_read_socket(SOCKET fd, void *buf, int32_t n) {
     int32_t rc = recv(fd, buf, n, 0);
 
-    if (rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
+    if(rc == SOCKET_ERROR) { set_socket_errno(WSAGetLastError()); }
 
     return (rc);
 }
@@ -211,17 +211,17 @@ char * win32_strtok_r(char *s, const char *delim, char **lasts) {
     char *tok;
 
 
-    if (s == NULL && (s = *lasts) == NULL) { return (NULL); }
+    if(s == NULL && (s = *lasts) == NULL) { return (NULL); }
 
     // skip (span) leading delimiters (s += strspn(s, delim), sort of).
 cont:
     c = *s++;
 
-    for (spanp = (char *)delim; (sc = *spanp++) != 0;)
-        if (c == sc) { goto cont; }
+    for(spanp = (char *)delim; (sc = *spanp++) != 0;)
+        if(c == sc) { goto cont; }
 
 
-    if (c == 0) { // no non-delimiter characters
+    if(c == 0) { // no non-delimiter characters
         *lasts = NULL;
         return (NULL);
     }
@@ -231,13 +231,13 @@ cont:
     /* Scan token (scan for delimiters: s += strcspn(s, delim), sort of).
      * Note that delim must have one NUL; we stop if we see that, too.
      */
-    for ( ; ;) {
+    for( ; ;) {
         c = *s++;
         spanp = (char *)delim;
 
         do {
-            if ((sc = *spanp++) == c) {
-                if (c == 0) {
+            if((sc = *spanp++) == c) {
+                if(c == 0) {
                     s = NULL;
                 } else {
                     s[-1] = 0;
@@ -259,17 +259,17 @@ char *win32_strsep (char **stringp, const char *delim) {
     register int32_t c, sc;
     char *tok;
 
-    if ((s = *stringp) == NULL) {
+    if((s = *stringp) == NULL) {
         return (NULL);
     }
 
-    for (tok = s; ;) {
+    for(tok = s; ;) {
         c = *s++;
         spanp = delim;
 
         do {
-            if ((sc = *spanp++) == c) {
-                if (c == 0) {
+            if((sc = *spanp++) == c) {
+                if(c == 0) {
                     s = NULL;
                 } else {
                     s[-1] = 0;
@@ -287,7 +287,7 @@ char *win32_strsep (char **stringp, const char *delim) {
 
 #ifndef STLINK_HAVE_UNISTD_H
 int32_t usleep(uint32_t waitTime) {
-    if (waitTime >= 1000) {
+    if(waitTime >= 1000) {
         /* Don't do long busy-waits.
          * However much it seems like the QPC code would be more accurate,
          * you can and probably will lose your time slice at any point during the wait,

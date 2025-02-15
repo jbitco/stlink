@@ -9,13 +9,13 @@
 #define LOGGING_H
 
 #include <stdint.h>
-#include "spdlog_wrapper.h"
+#include "logging_spdlog_wr.h"
 
 #ifdef  __cplusplus
 extern "C" {
 #endif // __cplusplus
 
-/* Optional: Enable interface for SPDLOG to replace UglyLogging */
+/* Optional: Enable interface for spdlog to replace UglyLogging */
 // #define SPDLOG_LOGGING
 
 enum ugly_loglevel {

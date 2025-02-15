@@ -1,5 +1,11 @@
-#ifndef BACKEND_H
-#define BACKEND_H
+/*
+ * File: stlink_backend.h
+ *
+ * stlink backend
+ */
+
+#ifndef STLINK_BACKEND_H
+#define STLINK_BACKEND_H
 
 #include <stdint.h>
 
@@ -36,4 +42,4 @@
         int32_t (*trace_read) (stlink_t * sl, uint8_t* buf, uint32_t size);
     } stlink_backend_t;
 
-#endif // BACKEND_H
+#endif // STLINK_BACKEND_H

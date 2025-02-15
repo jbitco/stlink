@@ -4,6 +4,7 @@ Alexey Cherevatenko
 Alexey Panarin
 Anatoli Klassen [dev26th]
 Andrea Mucignat
+Andreas Michelis [a-michelis]
 Andrew Andrianov [nekromant]
 Andrey Yurovsky
 Andy Isaacson

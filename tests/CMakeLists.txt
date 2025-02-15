@@ -2,7 +2,7 @@
 # Build test executables
 ###
 
-set(TESTEXEC usb sg)
+set(TESTEXEC usb sg_legacy)
 
 set(TEST_DEPENDENCY ${STLINK_LIB_SHARED})
 if (WIN32)

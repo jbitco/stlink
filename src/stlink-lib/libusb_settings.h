@@ -46,7 +46,7 @@
     #define MINIMAL_API_VERSION 0x01000109 // v1.0.25
 #endif
 
-#if (LIBUSB_API_VERSION < MINIMAL_API_VERSION)
+#if(LIBUSB_API_VERSION < MINIMAL_API_VERSION)
     #error unsupported libusb version
 #endif
 

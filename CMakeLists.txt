@@ -2,14 +2,14 @@
 # General cmake settings
 ###
 
-cmake_minimum_required(VERSION 3.10.2)
+cmake_minimum_required(VERSION 3.16.3)
 cmake_policy(SET CMP0042 NEW)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
@@ -96,6 +96,7 @@ endif()
 ###
 
 find_package(libusb REQUIRED)
+add_definitions(${LIBUSB_DEFINITIONS}) #only affects MSVC, For ssize-t
 
 ## Check for system-specific additional header files and libraries
 
@@ -168,24 +169,26 @@ add_subdirectory(inc)
 
 ## Define source- and headerfiles for stlink library
 set(STLINK_HEADERS
-        inc/backend.h
         inc/stlink.h
+        inc/stlink_backend.h
+        inc/stlink_cmd.h
         inc/stm32.h
-        inc/stm32flash.h
+        inc/stm32_flash.h
         src/stlink-lib/calculate.h
         src/stlink-lib/chipid.h
-        src/stlink-lib/commands.h
         src/stlink-lib/common_flash.h
         src/stlink-lib/flash_loader.h
         src/stlink-lib/helper.h
         src/stlink-lib/libusb_settings.h
         src/stlink-lib/lib_md5.h
         src/stlink-lib/logging.h
+        src/stlink-lib/logging_spdlog_wr.h
         src/stlink-lib/map_file.h
         src/stlink-lib/md5.h
         src/stlink-lib/option_bytes.h
-        src/stlink-lib/register.h
-        src/stlink-lib/sg.h
+        src/stlink-lib/programmer.h
+        src/stlink-lib/read_write.h
+        src/stlink-lib/sg_legacy.h
         src/stlink-lib/usb.h
         )
 
@@ -193,16 +196,17 @@ set(STLINK_SOURCE
         src/stlink-lib/calculate.c
         src/stlink-lib/chipid.c
         src/stlink-lib/common_flash.c
-        src/stlink-lib/common.c
+        src/stlink-lib/common_legacy.c
         src/stlink-lib/flash_loader.c
         src/stlink-lib/helper.c
+        src/stlink-lib/lib_md5.c
         src/stlink-lib/logging.c
         src/stlink-lib/map_file.c
-        src/stlink-lib/lib_md5.c
         src/stlink-lib/md5.c
         src/stlink-lib/option_bytes.c
+        src/stlink-lib/programmer.c
         src/stlink-lib/read_write.c
-        src/stlink-lib/sg.c
+        src/stlink-lib/sg_legacy.c
         src/stlink-lib/usb.c
         )
 
@@ -254,36 +258,45 @@ add_library(${STLINK_LIB_SHARED} SHARED ${STLINK_HEADERS} ${STLINK_SOURCE})
 
 set(STLINK_SHARED_VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH})
 message(STATUS "STLINK_LIB_SHARED: ${STLINK_LIB_SHARED}")
-message(STATUS "PROJECT_VERSION_MAJOR: ${PROJECT_VERSION_MAJOR}")
 message(STATUS "VERSION: ${STLINK_SHARED_VERSION}")
 
 set_target_properties(${STLINK_LIB_SHARED} PROPERTIES
-        SOVERSION ${PROJECT_VERSION_MAJOR}
-        VERSION ${STLINK_SHARED_VERSION}
-        OUTPUT_NAME ${PROJECT_NAME}
-        )
+                        SOVERSION ${PROJECT_VERSION_MAJOR}
+                        VERSION ${STLINK_SHARED_VERSION}
+                        OUTPUT_NAME ${PROJECT_NAME}
+                        )
+
+# Since we're not using __declspec(dllexport), WINDOWS_EXPORT_ALL_SYMBOLS is mandatory for MSVC.
+# This call will only affect MSVC, compilers/OSes ignore it.
+# TODO: Use dllexport on the desired functions
+set_target_properties(${STLINK_LIB_SHARED} PROPERTIES
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
 
 # Link shared library
-if (WIN32) # ... with Windows libraries
+if (WIN32)
     target_link_libraries(${STLINK_LIB_SHARED} ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
 else ()
     target_link_libraries(${STLINK_LIB_SHARED} ${LIBUSB_LIBRARY} ${SSP_LIB})
 endif()
 
-install(TARGETS ${STLINK_LIB_SHARED}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        )
-
-# Copy libusb DLL-library to binary output folder
-if (WIN32)
-file(COPY ${LIBUSB_WIN_OUTPUT_FOLDER}/MinGW64/dll/libusb-1.0.dll
-     DESTINATION ${CMAKE_INSTALL_BINDIR})
-file(COPY ${LIBUSB_WIN_OUTPUT_FOLDER}/MinGW64/dll/libusb-1.0.dll
-     DESTINATION ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR})
+# For MSVC:
+#    shared libraries (.dll) go to `bin`
+#    their Import Libraries (aka: ImpLibs; .lib files) go to `lib`
+if (MSVC)
+    install(TARGETS ${STLINK_LIB_SHARED}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# For non-MSVC:
+#    shared libraries go to `lib`
+#    Archive destination is set to `lib` as failsafe
+else()
+    install(TARGETS ${STLINK_LIB_SHARED}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
-
 
 ###
 # Static library
@@ -300,17 +313,16 @@ add_library(${STLINK_LIB_STATIC} STATIC ${STLINK_HEADERS} ${STLINK_SOURCE})
 
 set(STLINK_STATIC_VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH})
 message(STATUS "STLINK_LIB_STATIC: ${STLINK_LIB_STATIC}")
-message(STATUS "PROJECT_VERSION_MAJOR: ${PROJECT_VERSION_MAJOR}")
 message(STATUS "VERSION: ${STLINK_STATIC_VERSION}")
 
 set_target_properties(${STLINK_LIB_STATIC} PROPERTIES
-        SOVERSION ${PROJECT_VERSION_MAJOR}
-        VERSION ${STLINK_STATIC_VERSION}
-        OUTPUT_NAME ${STLINK_LIB_STATIC_OUTPUT_NAME}
-        )
+                        SOVERSION ${PROJECT_VERSION_MAJOR}
+                        VERSION ${STLINK_STATIC_VERSION}
+                        OUTPUT_NAME ${STLINK_LIB_STATIC_OUTPUT_NAME}
+                        )
 
 # Link static library
-if (WIN32) # ... with Windows libraries
+if (WIN32)
     target_link_libraries(${STLINK_LIB_STATIC} ${LIBUSB_LIBRARY} ${SSP_LIB} wsock32 ws2_32)
 else ()
     target_link_libraries(${STLINK_LIB_STATIC} ${LIBUSB_LIBRARY} ${SSP_LIB})
@@ -341,15 +353,15 @@ add_executable(st-util ${ST-UTIL_SOURCES})
 add_executable(st-trace ${ST-TRACE_SOURCES})
 
 if (WIN32)
-    target_link_libraries(st-flash ${STLINK_LIB_STATIC} ${SSP_LIB})
-    target_link_libraries(st-info ${STLINK_LIB_STATIC} ${SSP_LIB})
-    target_link_libraries(st-util ${STLINK_LIB_STATIC} ${SSP_LIB})
-    target_link_libraries(st-trace ${STLINK_LIB_STATIC} ${SSP_LIB})
+    target_link_libraries(st-flash ${STLINK_LIB_STATIC})
+    target_link_libraries(st-info ${STLINK_LIB_STATIC})
+    target_link_libraries(st-util ${STLINK_LIB_STATIC})
+    target_link_libraries(st-trace ${STLINK_LIB_STATIC})
 else ()
-    target_link_libraries(st-flash ${STLINK_LIB_SHARED} ${SSP_LIB})
-    target_link_libraries(st-info ${STLINK_LIB_SHARED} ${SSP_LIB})
-    target_link_libraries(st-util ${STLINK_LIB_SHARED} ${SSP_LIB})
-    target_link_libraries(st-trace ${STLINK_LIB_SHARED} ${SSP_LIB})
+    target_link_libraries(st-flash ${STLINK_LIB_SHARED})
+    target_link_libraries(st-info ${STLINK_LIB_SHARED})
+    target_link_libraries(st-util ${STLINK_LIB_SHARED})
+    target_link_libraries(st-trace ${STLINK_LIB_SHARED})
 endif()
 
 install(TARGETS st-flash DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -380,10 +392,10 @@ endif()
 
 # MCU configuration files
 if (WIN32)
-set(CMAKE_CHIPS_DIR ${CMAKE_INSTALL_PREFIX}/config/chips)
+    set(CMAKE_CHIPS_DIR ${CMAKE_INSTALL_PREFIX}/config/chips)
 else ()
-set(CMAKE_CHIPS_DIR ${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME}/chips)
-endif ()
+    set(CMAKE_CHIPS_DIR ${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME}/config/chips)
+endif()
 add_definitions( -DSTLINK_CHIPS_DIR="${CMAKE_CHIPS_DIR}" )
 file(GLOB CHIP_FILES ${CMAKE_SOURCE_DIR}/config/chips/*.chip)
 install(FILES ${CHIP_FILES} DESTINATION ${CMAKE_CHIPS_DIR})
@@ -395,6 +407,7 @@ add_subdirectory(doc/man)         # contains subordinate CMakeLists to generate 
 add_subdirectory(src/stlink-gui)  # contains subordinate CMakeLists to build GUI
 add_subdirectory(tests)           # contains subordinate CMakeLists to build test executables
 add_subdirectory(cmake/packaging) # contains subordinate CMakeLists to build packages
+
 
 ###
 # Uninstall target

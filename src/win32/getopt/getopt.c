@@ -34,32 +34,32 @@ int32_t getopt(int32_t argc, char* const argv[], const char* optstring) {
     optopt = 0;
 
     /* Unspecified, but we need it to avoid overrunning the argv bounds. */
-    if (optind >= argc) { goto no_more_optchars; }
+    if(optind >= argc) { goto no_more_optchars; }
 
     /* If, when getopt() is called argv[optind] is a null pointer,
      * getopt() shall return -1 without changing optind.
      */
-    if (argv[optind] == NULL) { goto no_more_optchars; }
+    if(argv[optind] == NULL) { goto no_more_optchars; }
 
     /* If, when getopt() is called *argv[optind]  is not the character '-',
      * getopt() shall return -1 without changing optind.
      */
-    if (*argv[optind] != '-') { goto no_more_optchars; }
+    if(*argv[optind] != '-') { goto no_more_optchars; }
 
     /* If, when getopt() is called argv[optind] points to the string "-",
      * getopt() shall return -1 without changing optind.
      */
-    if (strcmp(argv[optind], "-") == 0) { goto no_more_optchars; }
+    if(strcmp(argv[optind], "-") == 0) { goto no_more_optchars; }
 
     /* If, when getopt() is called argv[optind] points to the string "--",
      * getopt() shall return -1 after incrementing optind.
      */
-    if (strcmp(argv[optind], "--") == 0) {
+    if(strcmp(argv[optind], "--") == 0) {
         ++optind;
         goto no_more_optchars;
     }
 
-    if (optcursor == NULL || *optcursor == '\0') { optcursor = argv[optind] + 1; }
+    if(optcursor == NULL || *optcursor == '\0') { optcursor = argv[optind] + 1; }
 
     optchar = *optcursor;
 
@@ -71,18 +71,18 @@ int32_t getopt(int32_t argc, char* const argv[], const char* optstring) {
      */
     optdecl = strchr(optstring, optchar);
 
-    if (optdecl) {
+    if(optdecl) {
         /* [I]f a character is followed by a colon, the option takes an argument. */
-        if (optdecl[1] == ':') {
+        if(optdecl[1] == ':') {
             optarg = ++optcursor;
 
-            if (*optarg == '\0') {
+            if(*optarg == '\0') {
                 /* GNU extension: Two colons mean an option takes an optional arg;
                  * if there is text in the current argv-element (i.e., in the same word
                  * as the option name itself, for example, "-oarg"), then it is returned
                  * in optarg, otherwise optarg is set to zero.
                  */
-                if (optdecl[2] != ':') {
+                if(optdecl[2] != ':') {
                     /* If the option was the last character in the string pointed to by
                      * an element of argv, then optarg shall contain the next element
                      * of argv, and optind shall be incremented by 2. If the resulting
@@ -92,7 +92,7 @@ int32_t getopt(int32_t argc, char* const argv[], const char* optstring) {
                      * option character in that element of argv, and optind shall be
                      * incremented by 1.
                      */
-                    if (++optind < argc) {
+                    if(++optind < argc) {
                         optarg = argv[optind];
                     } else {
                         /* If it detects a missing option-argument, it shall return the
@@ -116,7 +116,7 @@ int32_t getopt(int32_t argc, char* const argv[], const char* optstring) {
         optchar = '?';
     }
 
-    if (optcursor == NULL || *++optcursor == '\0') { ++optind; }
+    if(optcursor == NULL || *++optcursor == '\0') { ++optind; }
 
     return (optchar);
 
@@ -141,9 +141,9 @@ int32_t getopt_long(int32_t argc,
     optarg = NULL;
     optopt = 0;
 
-    if (optind >= argc) { return (-1); }
+    if(optind >= argc) { return (-1); }
 
-    if (strlen(argv[optind]) < 3 || strncmp(argv[optind], "--", 2) != 0) {
+    if(strlen(argv[optind]) < 3 || strncmp(argv[optind], "--", 2) != 0) {
         return (getopt(argc, argv, optstring));
     }
 
@@ -151,41 +151,41 @@ int32_t getopt_long(int32_t argc,
     current_argument = argv[optind] + 2;
     argument_name_length = strcspn(current_argument, "=");
 
-    for ( ; o->name; ++o)
-        if (strncmp(o->name, current_argument, argument_name_length) == 0) {
+    for( ; o->name; ++o)
+        if(strncmp(o->name, current_argument, argument_name_length) == 0) {
             match = o;
             ++num_matches;
         }
 
 
-    if (num_matches == 1) {
+    if(num_matches == 1) {
         /* If longindex is not NULL, it points to a variable which is set to the
          * index of the long option relative to longopts.
          */
-        if (longindex) { *longindex = (match - longopts); }
+        if(longindex) { *longindex = (match - longopts); }
 
         /* If flag is NULL, then getopt_long() shall return val.
          * Otherwise, getopt_long() returns 0, and flag shall point to a variable
          * which shall be set to val if the option is found, but left unchanged if
          * the option is not found.
          */
-        if (match->flag) { *(match->flag) = match->val; }
+        if(match->flag) { *(match->flag) = match->val; }
 
         retval = match->flag ? 0 : match->val;
 
-        if (match->has_arg != no_argument) {
+        if(match->has_arg != no_argument) {
             optarg = strchr(argv[optind], '=');
 
-            if (optarg != NULL) { ++optarg; }
+            if(optarg != NULL) { ++optarg; }
 
-            if (match->has_arg == required_argument) {
+            if(match->has_arg == required_argument) {
                 /* Only scan the next argv for required arguments. Behavior is not
                    specified, but has been observed with Ubuntu. */
-                if (optarg == NULL && ++optind < argc) { optarg = argv[optind]; }
+                if(optarg == NULL && ++optind < argc) { optarg = argv[optind]; }
 
-                if (optarg == NULL) { retval = ':'; }
+                if(optarg == NULL) { retval = ':'; }
             }
-        } else if (strchr(argv[optind], '=')) {
+        } else if(strchr(argv[optind], '=')) {
             /* An argument was provided to a non-argument option.
              * I haven't seen this specified explicitly, but both GNU and BSD-based
              * implementations show this behavior.

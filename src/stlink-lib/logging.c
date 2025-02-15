@@ -2,6 +2,7 @@
  * File: logging.c
  *
  * UglyLogging: Slow, yet another wheel reinvented, but enough to make the rest of our code pretty enough.
+ * Ugly, low performance, configurable level, logging "framework"
  */
 
 #define __STDC_WANT_LIB_EXT1__ 1
@@ -22,7 +23,7 @@ int32_t ugly_init(int32_t maximum_threshold) {
 }
 
 int32_t ugly_log(int32_t level, const char *tag, const char *format, ...) {
-  if (level > max_level) {
+  if(level > max_level) {
     return (0);
   }
 
